@@ -1,0 +1,22 @@
+{
+  "name": "music-quizzer",
+  "version": "1.0.0",
+  "description": "A Discord music quiz bot",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Noah Piraino <noahapiraino@gmail.com>",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "@discordjs/opus": "^0.5.0",
+    "discord.js": "^12.5.1",
+    "node-addon-api": "^3.1.0",
+    "opusscript": "^0.0.8",
+    "spotify-web-api-node": "^5.0.2"
+  },
+  "devDependencies": {
+    "eslint": "^7.22.0"
+  }
+}
