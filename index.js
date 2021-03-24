@@ -134,13 +134,17 @@ function selectTracks(url, count) {
 		getTracks(url).then(allTracks => {
 			const fullTracks = allTracks.filter(t => t.preview_url);
 			const missingTracks = allTracks.filter(t => !t.preview_url);
+
+			let missingTrackIdChunks = [];
+			for (let i = 0; i < missingTracks.length; i += 25) {
+				missingTrackIdChunks.push(missingTracks.slice(i, i+25).map(track => track.id));
+			}
+			
 			Promise.all(
-				missingTracks
-					.sort(() => Math.random() > 0.5 ? 1 : -1)
-					.slice(0, 0 /*Math.floor(count * 1.5) < missingTracks.length - 1 ? Math.floor(count * 1.5) : missingTracks.length */)
-					.map(t => spotifyClient.getTrack(t.id, { market: "US" }))
+				missingTrackIdChunks
+					.map(chunk => spotifyClient.getTracks(chunk))
 			).then(responses => {
-				const updatedTracks = responses.map(r => r.body);
+				const updatedTracks = responses.map(r => r.body.tracks).flat();
 				const combinedTracks = fullTracks.concat(updatedTracks);
 				resolve(
 					combinedTracks
@@ -164,17 +168,27 @@ discordClient.on("message", message => {
 		message.channel.send(helpMessage);
 		return;
 	} else if (message.content.toLowerCase().trim() === leaderboardCommand) {
-		getLeaderboard(message.guild).then(board => {
-			const leaderboard = new Discord.MessageEmbed().setTitle("Music Quizzer Leaderboard");
-			board.forEach(d => {
-				leaderboard.addFields({
-					name: d.username,
-					value: `${d.points} points`
+		const board = getLeaderboard();
+		const leaderboard = new Discord.MessageEmbed().setTitle("Music Quizzer Leaderboard");
+
+		message.guild.members.fetch().then(members => {
+			members
+				.filter(member =>
+					Object.keys(board)
+						.includes(member.id)
+				).map(member => ({
+					username: member.user.username,
+					points: board[member.id]
+				}))
+				.sort((a, b) =>
+					a.points < b.points ? 1 : -1
+				).forEach(entry => {
+					leaderboard.addFields({
+						name: entry.username,
+						value: `${entry.points} points`
+					});
 				});
-			});
 			message.channel.send(leaderboard);
-		}, e => {
-			message.channel.send(String(e));
 		});
 	}
 
@@ -387,18 +401,22 @@ function checkGuess(message) {
 	let correct = false;
 
 	function transform(text) {
-		return text
-			.toLowerCase()
-			// special marks
-			.normalize("NFD")
-			.replace(/[\u0300-\u036F]/g, "")
-			// smart quotes
-			.replace(/[\u2018\u2019]/g, "")
-			.replace(/[\u201C\u201D]/g, "")
-			.replace(/[&]/g,"and")
-			.replace(/ *\([^)]*\) */g, "")
-			.replace(/[.,/#!$%^&*;:{}=\-_'`~]/g,"")
-			.replace(/\s{2,}/g," ");
+		if (!text) {
+			return "";
+		} else {
+			return text
+				.toLowerCase()
+				// special marks
+				.normalize("NFD")
+				.replace(/[\u0300-\u036F]/g, "")
+				// smart quotes
+				.replace(/[\u2018\u2019]/g, "")
+				.replace(/[\u201C\u201D]/g, "")
+				.replace(/[&]/g,"and")
+				.replace(/ *\([^)]*\) */g, "")
+				.replace(/[.,/#!$%^&*;:{}=\-_'`~]/g,"")
+				.replace(/\s{2,}/g," ");
+		}
 	}
 	
 	if (!titleGuessed && transform(message.content).includes(transform(song.title))) {
@@ -470,69 +488,36 @@ function updateLeaderboard() {
 	fs.writeFileSync(leaderboardPath, JSON.stringify(currentLeaderboard, null, 2), { encoding: "utf-8" });
 }
 
-/**
- * @param {Discord.Guild} guild
- */
-function getLeaderboard(guild) {
-	return new Promise((resolve, reject) => {
-		const leaderboardPath = path.resolve(leaderboardFilename);
+function getLeaderboard() {
+	const leaderboardPath = path.resolve(leaderboardFilename);
 
-		let contents;
-		try {
-			contents = fs.readFileSync(leaderboardPath);
-		} catch (e) {
-			console.error(e);
-			reject("There isn't a leaderboard yet!");
-			return;
-		}
+	let contents;
+	if (fs.existsSync(leaderboardPath)) {
+		contents = fs.readFileSync(leaderboardPath);
+	} else {
+		return 0;
+	}
 
-		let leaderboardData;
-		try {
-			leaderboardData = JSON.parse(contents);
-		} catch (e) {
-			console.error(e);
-			reject("Error parsing leaderboard!");
-			return;
-		}
+	let leaderboardData;
+	try {
+		leaderboardData = JSON.parse(contents);
+	} catch (e) {
+		console.error(e);
+		return 1;
+	}
 
-		if (Object.keys(leaderboardData).length < 1) {
-			reject("There isn't a leaderboard yet!");
-			return;
-		}
+	if (Object.keys(leaderboardData).length < 1) {
+		return 0;
+	}
 
-		Promise.all(
-			Object.keys(leaderboardData)
-				.map(memberId => guild.members
-					.fetch(memberId)
-					.then(member => ({
-						username: member.user.username,
-						points: leaderboardData[memberId]
-					}))
-				)
-		).then(entries => resolve(
-			entries.sort((a, b) => a.points < b.points ? 1 : -1)
-		));
-	});
+	return leaderboardData;
 }
 
 // Initialization ----------------------
 
 spotifyClient.clientCredentialsGrant().then(response => {
 	spotifyClient.setAccessToken(response.body.access_token);
-	spotifyClient.setRefreshToken(response.body.refresh_token);
-
-	setInterval(() => {
-		spotifyClient.refreshAccessToken().then(response => {
-			console.log("The access token has been refreshed!");
-			spotifyClient.setAccessToken(response.body.access_token);
-			spotifyClient.setRefreshToken(response.body.refresh_token);
-		},
-		e => {
-			console.log("Could not refresh access token", e);
-		}
-		);
-	}, 1000 * 60 * 60);
-
+	
 	discordClient.on("ready", () => {
 		console.log(`Logged in as ${discordClient.user.tag}!`);
 	});
