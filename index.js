@@ -169,27 +169,34 @@ discordClient.on("message", message => {
 		return;
 	} else if (message.content.toLowerCase().trim() === leaderboardCommand) {
 		const board = getLeaderboard();
-		const leaderboard = new Discord.MessageEmbed().setTitle("Music Quizzer Leaderboard");
 
-		message.guild.members.fetch().then(members => {
-			members
-				.filter(member =>
-					Object.keys(board)
-						.includes(member.id)
-				).map(member => ({
-					username: member.user.username,
-					points: board[member.id]
-				}))
-				.sort((a, b) =>
-					a.points < b.points ? 1 : -1
-				).forEach(entry => {
-					leaderboard.addFields({
-						name: entry.username,
-						value: `${entry.points} points`
+		if (board === 0) {
+			message.channel.send("There isn't a leaderboard yet!");
+		} else if (board === 1) {
+			message.channel.send("There was an error reading the leaderboard!");
+		} else {
+			const leaderboard = new Discord.MessageEmbed().setTitle("Music Quizzer Leaderboard");
+
+			message.guild.members.fetch().then(members => {
+				members
+					.filter(member =>
+						Object.keys(board)
+							.includes(member.id)
+					).map(member => ({
+						username: member.user.username,
+						points: board[member.id]
+					}))
+					.sort((a, b) =>
+						a.points < b.points ? 1 : -1
+					).forEach(entry => {
+						leaderboard.addFields({
+							name: entry.username,
+							value: `${entry.points} points`
+						});
 					});
-				});
-			message.channel.send(leaderboard);
-		});
+				message.channel.send(leaderboard);
+			});
+		}
 	}
 
 	// music-quiz command
