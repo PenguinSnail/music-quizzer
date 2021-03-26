@@ -479,14 +479,19 @@ function updateLeaderboard() {
 		fs.writeFileSync(leaderboardPath, "{}", { encoding: "utf-8" });
 	}
 
-	let currentLeaderboard = getLeaderboard();
-	if (typeof currentLeaderboard !== "object") currentLeaderboard = {};
+	let leaderboardData;
+	try {
+		leaderboardData = JSON.parse(fs.readFileSync(leaderboardPath));
+	} catch (e) {
+		console.error(e);
+		leaderboardData = {};
+	}
 
 	Object.keys(scores).forEach(memberId => {
-		currentLeaderboard[memberId] = (currentLeaderboard[memberId] ? currentLeaderboard[memberId] : 0) + scores[memberId];
+		leaderboardData[memberId] = (leaderboardData[memberId] ? leaderboardData[memberId] : 0) + scores[memberId];
 	});
 
-	fs.writeFileSync(leaderboardPath, JSON.stringify(currentLeaderboard, null, 2), { encoding: "utf-8" });
+	fs.writeFileSync(leaderboardPath, JSON.stringify(leaderboardData, null, 2), { encoding: "utf-8" });
 }
 
 function getLeaderboard() {
