@@ -479,7 +479,8 @@ function updateLeaderboard() {
 		fs.writeFileSync(leaderboardPath, "{}", { encoding: "utf-8" });
 	}
 
-	let currentLeaderboard = JSON.parse(fs.readFileSync(leaderboardPath));
+	let currentLeaderboard = getLeaderboard();
+	if (typeof currentLeaderboard !== "object") currentLeaderboard = {};
 
 	Object.keys(scores).forEach(memberId => {
 		currentLeaderboard[memberId] = (currentLeaderboard[memberId] ? currentLeaderboard[memberId] : 0) + scores[memberId];
