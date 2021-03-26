@@ -177,7 +177,7 @@ discordClient.on("message", message => {
 		} else {
 			const leaderboard = new Discord.MessageEmbed().setTitle("Music Quizzer Leaderboard");
 
-			message.guild.members.fetch().then(members => {
+			message.guild.members.fetch({user: Object.keys(board)}).then(members => {
 				members
 					.filter(member =>
 						Object.keys(board)
@@ -195,6 +195,9 @@ discordClient.on("message", message => {
 						});
 					});
 				message.channel.send(leaderboard);
+			}).catch(e => {
+				console.error(e);
+				message.channel.send("Unable to get user information from Discord!");
 			});
 		}
 	}
