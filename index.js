@@ -221,7 +221,7 @@ discordClient.on("message", message => {
 	}
 
 	// handle guessing and stopping if active
-	if (active && message.channel == textChannel) {
+	if (active && message.channel == textChannel && voiceChannel.members.map(m => m.user.id).includes(message.member.user.id)) {
 		if (message.content.toLowerCase().trim() === stopCommand) {
 			stopQuiz();
 		} else if (message.content.toLowerCase().trim() === skipCommand) {
@@ -317,9 +317,6 @@ function stopQuiz() {
 	currentTrack = 0;
 	skipVotes = 0;
 
-	//voiceChannel = undefined;
-	//textChannel = undefined;
-	//connection = undefined;
 	song = {};
 
 	clearTimeout(timer);
@@ -424,7 +421,7 @@ function checkGuess(message) {
 				.replace(/[\u201C\u201D]/g, "")
 				.replace(/[&]/g,"and")
 				.replace(/ *\([^)]*\) */g, "")
-				.replace(/[.,/#!$%^&*;:{}=\-_'`~]/g,"")
+				.replace(/[.,/#!$%^&?*;:{}=\-_'`~]/g,"")
 				.replace(/\s{2,}/g," ");
 		}
 	}
@@ -454,15 +451,7 @@ function checkGuess(message) {
  * @returns the cleaned up song title
  */
 function sanitizeTitle(title) {
-	const offendingText = [
-		"- Remast",
-		"(Remast",
-		"- Live ",
-		"(Live at",
-		"- Mono / Remast",
-		"- From ",
-		"- Single "
-	];
+	let offendingText = [];
 
 	for (let y = 1990; y < new Date().getFullYear(); y++) {
 		offendingText.push("- " + y + " - Remast");
@@ -470,6 +459,17 @@ function sanitizeTitle(title) {
 		offendingText.push("(" + y + " Remast");
 		offendingText.push("(" + y + " - Remast");
 	}
+
+	offendingText = offendingText.concat([
+		"- Remast",
+		"(Remast",
+		"- Live ",
+		"(Live at",
+		"- Mono / Remast",
+		"- From ",
+		"- Single ",
+		"- Studio "
+	]);
 
 	offendingText.forEach(part => {
 		if (title.includes(part)) {
@@ -497,7 +497,7 @@ function updateLeaderboard() {
 		leaderboardData = {};
 	}
 
-	Object.keys(scores).forEach(memberId => {
+	Object.keys(scores).filter(memberId => scores[memberId] > 0).forEach(memberId => {
 		leaderboardData[memberId] = (leaderboardData[memberId] ? leaderboardData[memberId] : 0) + scores[memberId];
 	});
 
