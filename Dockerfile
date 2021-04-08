@@ -8,6 +8,6 @@ COPY ./package.json /music-quizzer
 COPY ./package-lock.json /music-quizzer
 RUN npm ci
 
-COPY ./*.js /music-quizzer
+COPY . /music-quizzer/
 
 ENTRYPOINT ["node", "index.js"]
