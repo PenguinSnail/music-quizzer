@@ -63,7 +63,7 @@ class Quiz {
 				const guessValid = checkGuess(message.content, this.tracks[this.track]);
 				let correct = false;
 
-				if (guessValid.includes("artist")) {
+				if (!this.artistGuessed && guessValid.includes("artist")) {
 					this.artistGuessed = true;
 					correct = true;
 
@@ -79,7 +79,7 @@ class Quiz {
 					);
 				}
 				
-				if (guessValid.includes("title")) {
+				if (!this.titleGuessed && guessValid.includes("title")) {
 					this.titleGuessed = true;
 					correct = true;
 
