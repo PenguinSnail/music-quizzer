@@ -93,7 +93,7 @@ class Spotify {
 		return new Promise((resolve, reject) => {
 			this.getLinkTracks(url).then(allTracks => {
 				const fullTracks = allTracks.filter(t => t).filter(t => t.preview_url);
-				const missingTracks = allTracks.filter(t => !t.preview_url);
+				const missingTracks = allTracks.filter(t => t).filter(t => !t.preview_url);
 
 				// attempt a refresh of tracks without preview urls
 				let missingTrackIdChunks = [];
