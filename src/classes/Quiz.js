@@ -1,5 +1,6 @@
 // eslint-disable-next-line no-unused-vars
 import Discord from "discord.js";
+import { joinVoiceChannel, createAudioPlayer, createAudioResource } from "@discordjs/voice";
 // eslint-disable-next-line no-unused-vars
 import Leaderboard from "./Leaderboard.js";
 
@@ -23,6 +24,7 @@ class Quiz {
 		this.textChannel;
 		this.voiceChannel;
 		this.connection;
+		this.player;
 		this.timer;
 
 		/** @type {Map<string, number} */
@@ -78,7 +80,7 @@ class Quiz {
 						+ getPopularityModifier(this.tracks[this.track].popularity)
 					);
 				}
-				
+
 				if (!this.titleGuessed && guessValid.includes("title")) {
 					this.titleGuessed = true;
 					correct = true;
@@ -115,7 +117,7 @@ class Quiz {
 	 * @param {Track[]} tracks the tracks to quiz
 	 */
 	startQuiz(textChannel, voiceChannel, tracks) {
-		this.client.on("message", this.messageHandler);
+		this.client.on(Discord.Events.MessageCreate, this.messageHandler);
 		this.active = true;
 
 		this.textChannel = textChannel;
@@ -128,10 +130,21 @@ class Quiz {
 		this.artistGuessed = false;
 		this.titleGuessed = false;
 
-		this.voiceChannel.join().then(c => {
-			this.connection = c;
+		try {
+			this.connection = joinVoiceChannel({
+				channelId: voiceChannel.id,
+				guildId: voiceChannel.guild.id,
+				adapterCreator: voiceChannel.guild.voiceAdapterCreator
+			});
+			this.player = createAudioPlayer();
+			this.connection.subscribe(this.player);
+		} catch (e) {
+			console.error("Error connecting to voice channel!", e);
+			textChannel.send("Unable to connect to the voice channel!");
+			this.endQuiz();
+		}
 
-			textChannel.send(`
+		textChannel.send(`
 				**Let's get started**! :headphones: :tada:
 				**${this.tracks.length}** songs have been randomly selected.
 				You have 30 seconds to guess each song.
@@ -144,19 +157,18 @@ class Quiz {
 				- GLHF :microphone:
 			`.replace(/  +/g, "").replace(/\t/g, ""));
 
-			this.playCurrentTrack();
-		}, e => {
-			console.error("Error connecting to voice channel!", e);
-			textChannel.send("Unable to connect to the voice channel!");
-			this.endQuiz();
-		});
+		this.playCurrentTrack();
+
+
+
 	}
 
 	/**
 	 * End the music quiz
 	 */
 	endQuiz() {
-		if (this.connection) this.connection.disconnect();
+		if (this.player) this.player.stop();
+		if (this.connection) this.connection.destroy();
 		this.client.off("message", this.messageHandler);
 		this.active = false;
 
@@ -180,7 +192,7 @@ class Quiz {
 		if (this.track < this.tracks.length) {
 			try {
 				if (!this.tracks[this.track].previewUrl) throw new Error();
-				this.connection.play(this.tracks[this.track].previewUrl);
+				this.player.play(createAudioResource(this.tracks[this.track].previewUrl));
 			} catch (e) {
 				this.textChannel.send("Error playing song! Skipping...");
 				this.nextTrack();
@@ -196,6 +208,7 @@ class Quiz {
 	 * @param {string} message a message to display
 	 */
 	nextTrack(message) {
+		this.player.stop();
 		clearTimeout(this.timer);
 		if (this.track < this.tracks.length) {
 			const song = this.tracks[this.track];

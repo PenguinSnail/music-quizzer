@@ -5,22 +5,23 @@ class Spotify {
 	 * @param {string} id Spotify API ID
 	 * @param {string} secret Spotify API secret
 	 */
-	constructor(id, secret) {
+	createClient(id, secret) {
 		this.client = new SpotifyApi({
 			clientId: id,
 			clientSecret: secret
 		});
-
-		// reauthorize every hour
-		this.reauthorize = setInterval(this.authorize, 1000 * 60 * 60);
-		// initial authorization
-		this.authorize();
 	}
 
-	authorize() {
+	/**
+	 * @param {string} id Spotify API ID
+	 * @param {string} secret Spotify API secret
+	 */
+	authorize(id, secret) {
 		return new Promise((resolve, reject) => {
+			if (!this.client) this.createClient(id, secret);
 			this.client.clientCredentialsGrant().then(response => {
 				this.client.setAccessToken(response.body.access_token);
+				console.log("Spotify API credentials set");
 				resolve();
 			}, e => {
 				console.error("Error getting Spotify API credentials!", e);

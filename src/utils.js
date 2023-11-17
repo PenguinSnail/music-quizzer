@@ -28,7 +28,9 @@ export function sanitizeTitle(title) {
 		"- Mono / Remast",
 		"- From ",
 		"- Single ",
-		"- Studio "
+		"- Studio ",
+		"- Edit ",
+		"- Radio "
 	]);
 
 	offendingText.forEach(part => {
@@ -50,7 +52,7 @@ export function transform(text) {
 		return "";
 	} else {
 		return text
-		// all lower case
+			// all lower case
 			.toLowerCase()
 			// special marks
 			.normalize("NFD")
@@ -59,14 +61,14 @@ export function transform(text) {
 			.replace(/[\u2018\u2019]/g, "")
 			.replace(/[\u201C\u201D]/g, "")
 			// ampersands to and
-			.replace(/[&]/g,"and")
+			.replace(/[&]/g, "and")
 			// ignore parentheses text
 			.replace(/ *\([^)]*\) */g, "")
 			// punctuation
-			.replace(/[.,/#!$%^&?*;:{}=\-_'`~]/g,"")
+			.replace(/[.,/#!$%^&?*;:{}=\-_'`~]/g, "")
 			// spaces
 			//.replace(/\s{2,}/g," ");
-			.replace(/\s/g,"");
+			.replace(/\s/g, "");
 	}
 }
 
@@ -86,9 +88,7 @@ export function getPopularityModifier(popularity) {
  * @returns {string} scores as a string to send in a discord message
  */
 export function scoresToString(scores, members) {
-	return members
-		.filter(member => !member.user.bot)
-		.array()
+	return [...members.filter(member => !member.user.bot)].map(m => m[1])
 		.sort((first, second) => (scores.get(first.id) || 0) < (scores.get(second.id) || 0) ? 1 : -1)
 		.map((member, index) => {
 			let position = `**${index + 1}.** `;

@@ -9,8 +9,15 @@ import Track from "./src/classes/Track.js";
 
 // Clients -----------------------------
 
-const spotifyClient = new Spotify(process.env.SPOTIFY_ID, process.env.SPOTIFY_SECRET);
-const discordClient = new Discord.Client();
+const spotifyClient = new Spotify();
+const discordClient = new Discord.Client({intents: [
+	Discord.GatewayIntentBits.Guilds,
+	Discord.GatewayIntentBits.GuildMessages,
+	Discord.GatewayIntentBits.MessageContent,
+	Discord.GatewayIntentBits.GuildMembers,
+	Discord.GatewayIntentBits.GuildVoiceStates,
+	Discord.GatewayIntentBits.GuildMessageReactions
+] });
 const leaderboard = new Leaderboard();
 
 // Quizzes -----------------------------
@@ -20,33 +27,30 @@ const quizzes = new Map();
 
 // Messages ----------------------------
 
-const helpMessage = new Discord.MessageEmbed().setTitle("Music Quizzer Help");
+const helpMessage = new Discord.EmbedBuilder().setTitle("Music Quizzer Help");
 helpMessage.addFields({
 	name: commands.quizCommand + " <url> <count>",
 	value: "Play a music quiz from a spotify url"
-});
-helpMessage.addFields({
+}, {
 	name: commands.stopCommand,
 	value: "Stop an active music quiz (quiz must be active)"
-});
-helpMessage.addFields({
+}, {
 	name: commands.skipCommand,
 	value: "Vote to skip the current song (quiz must be active)"
-});
-helpMessage.addFields({
+}, {
 	name: commands.leaderboardCommand,
 	value: "View the music quiz leaderboard"
 });
 
 // Message Handler ---------------------
 
-discordClient.on("message", message => {
+discordClient.on(Discord.Events.MessageCreate, message => {
 	// ignore bots
 	if (message.author.bot) return;
 
 	// help message
 	if (message.content.toLowerCase().trim() === commands.helpCommand) {
-		message.channel.send(helpMessage);
+		message.channel.send({ embeds: [ helpMessage ] });
 		return;
 	}
 	
@@ -64,7 +68,7 @@ discordClient.on("message", message => {
 			return;
 		}
 
-		const boardMessage = new Discord.MessageEmbed().setTitle("Music Quizzer Leaderboard");
+		const boardMessage = new Discord.EmbedBuilder().setTitle("Music Quizzer Leaderboard");
 
 		message.guild.members.fetch({ user: [...board.keys()] }).then(members => {
 			members.map(member => ({
@@ -79,7 +83,7 @@ discordClient.on("message", message => {
 				});
 			});
 
-			message.channel.send(boardMessage);
+			message.channel.send({ embeds: [ boardMessage ] });
 		}).catch(e => {
 			console.error(e);
 			message.channel.send("Unable to get user information from Discord!");
@@ -129,7 +133,7 @@ discordClient.on("message", message => {
 	}
 });
 
-spotifyClient.authorize().then(() => {
+spotifyClient.authorize(process.env.SPOTIFY_ID, process.env.SPOTIFY_SECRET).then(() => {
 	discordClient.on("ready", () => {
 		console.log(`Logged in as ${discordClient.user.tag}!`);
 	});
