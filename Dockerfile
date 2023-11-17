@@ -1,4 +1,4 @@
-FROM node:15.12.0-alpine
+FROM node:21-alpine
 
 WORKDIR /music-quizzer
 
