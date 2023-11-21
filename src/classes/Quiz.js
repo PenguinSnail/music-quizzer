@@ -1,6 +1,9 @@
 import { AudioPlayer, VoiceConnection, joinVoiceChannel, createAudioPlayer } from "@discordjs/voice";
 import { TextChannel, VoiceChannel } from "discord.js";
 
+/**
+ * An individual music quiz round
+ */
 export default class Quiz {
     /**
     * Create a new Quiz object
