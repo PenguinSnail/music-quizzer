@@ -1,5 +1,7 @@
 import { AudioPlayer, VoiceConnection, joinVoiceChannel, createAudioPlayer } from "@discordjs/voice";
 import { TextChannel, VoiceChannel } from "discord.js";
+import Track from "./Track.js";
+import SpotifyManager from "../managers/SpotifyManager.js";
 
 /**
  * An individual music quiz round
@@ -10,23 +12,28 @@ export default class Quiz {
     * @param {TextChannel} textChannel text channel for guesses
     * @param {VoiceChannel} voiceChannel voice channel for quiz audio
     * @param {string} url spotify url
-    * @param {number} count song count
+    * @param {number | undefined} count song count
     */
     constructor(textChannel, voiceChannel, url, count) {
         /** @type {TextChannel} */
         this.textChannel = textChannel;
         /** @type {VoiceChannel} */
         this.voiceChannel = voiceChannel;
-        /** @type {string} */
-        this.url = url;
-        /** @type {number} */
-        this.count = count;
         /** @type {AudioPlayer} */
         this.audioPlayer = createAudioPlayer();
         /** @type {VoiceConnection} */
         this.voiceConnection;
+        /** @type {string} */
+        this.url = url;
+        /** @type {number} */
+        this.count = count;
+        /** @type {Track[]} */
+        this.tracks;
     }
 
+    /**
+     * Open a voice connection
+     */
     openVoice() {
         console.log("Joining voice channel " + this.voiceChannel.id + " in guild " + this.voiceChannel.guild.id);
         try {
@@ -42,6 +49,9 @@ export default class Quiz {
         }
     }
 
+    /**
+     * Close a voice connection
+     */
     closeVoice() {
         console.log("Leaving voice channel " + this.voiceChannel.id + " in guild " + this.voiceChannel.guild.id);
         try {
@@ -52,4 +62,15 @@ export default class Quiz {
             throw e;
         }
     }
+
+    /**
+     * Load tracks from the Spotify API
+     */
+    loadTracks = async () => {
+        try {
+            this.tracks = await SpotifyManager.getTracks(this.url, this.count)
+        } catch (e) {
+            throw e;
+        };
+    };
 }

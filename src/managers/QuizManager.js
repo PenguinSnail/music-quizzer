@@ -23,15 +23,19 @@ const getQuiz = (guildId) => {
  * @param {string} url spotify url
  * @param {number} count song count
  */
-const startQuiz = (guildId, textChannel, voiceChannel, url, count) => {
+const startQuiz = async (guildId, textChannel, voiceChannel, url, count) => {
     console.log("Starting quiz in guild " + guildId);
     const quiz = new Quiz(textChannel, voiceChannel, url, count);
+    try {
+        await quiz.loadTracks();
+    } catch (e) {
+        throw e;
+    }
     try {
         // open a voice channel connection
         quiz.openVoice();
     } catch {
-        textChannel.send("There was an error joining the voice channel!");
-        return;
+        throw new Error("There was an error joining the voice channel!");
     }
     quizzes.set(guildId, quiz);
 };
@@ -49,8 +53,7 @@ const stopQuiz = (guildId) => {
             // close the voice channel connection
             quiz.closeVoice();
         } catch (e) {
-            textChannel.send("There was an error leaving the voice channel!");
-            return;
+            throw new Error("There was an error leaving the voice channel!");
         }
     }
     quizzes.delete(guildId);

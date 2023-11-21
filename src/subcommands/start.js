@@ -39,26 +39,27 @@ export const handlerBuilder = () => {
      * @param {ChatInputCommandInteraction} interaction Command interaction
      */
     return async (interaction) => {
+        await interaction.deferReply();
         if (QuizManager.getQuiz(interaction.guildId)) {
-            await interaction.reply("A quiz is already active in this server!");
+            await interaction.editReply({ content: "A quiz is already active in this server!", ephemeral: true });
             return;
         }
         if (!interaction.member.voice.channel) {
-            await interaction.reply("You need to be in a voice channel to start a music quiz!");
+            await interaction.editReply({ content: "You need to be in a voice channel to start a music quiz!", ephemeral: true });
             return;
         }
         try {
-            await interaction.reply("Starting Quiz...");
-            QuizManager.startQuiz(
+            await QuizManager.startQuiz(
                 interaction.guildId,
                 interaction.channel,
                 interaction.member.voice.channel,
                 interaction.options.getString("url"),
                 interaction.options.getInteger("count")
             );
+            await interaction.editReply({ content: "Starting the quiz..." });
         } catch (e) {
-            console.error("Error starting quiz in guild " + interaction.guildId, e);
-            await interaction.reply("There was an error starting the quiz!");
+            console.error("Error starting quiz in guild " + interaction.guildId, "(" + e.name + ": " + e.message + ")");
+            await interaction.editReply({ content: e.message, ephemeral: true });
         }
     };
 };
