@@ -24,7 +24,15 @@ const getQuiz = (guildId) => {
  * @param {number} count song count
  */
 const startQuiz = (guildId, textChannel, voiceChannel, url, count) => {
+    console.log("Starting quiz in guild " + guildId);
     const quiz = new Quiz(textChannel, voiceChannel, url, count);
+    try {
+        // open a voice channel connection
+        quiz.openVoice();
+    } catch {
+        textChannel.send("There was an error joining the voice channel!");
+        return;
+    }
     quizzes.set(guildId, quiz);
 };
 
@@ -33,9 +41,17 @@ const startQuiz = (guildId, textChannel, voiceChannel, url, count) => {
  * @param {string} guildId guild id
  */
 const stopQuiz = (guildId) => {
+    console.log("Stopping quiz in guild " + guildId);
+    // if a quiz is running
     const quiz = quizzes.get(guildId);
     if (quiz) {
-        
+        try {
+            // close the voice channel connection
+            quiz.closeVoice();
+        } catch (e) {
+            textChannel.send("There was an error leaving the voice channel!");
+            return;
+        }
     }
     quizzes.delete(guildId);
 };

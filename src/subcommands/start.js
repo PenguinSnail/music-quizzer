@@ -39,7 +39,7 @@ export const handlerBuilder = () => {
      * @param {ChatInputCommandInteraction} interaction Command interaction
      */
     return async (interaction) => {
-        if (QuizManager.guildHasQuiz(interaction.guildId)) {
+        if (QuizManager.getQuiz(interaction.guildId)) {
             await interaction.reply("A quiz is already active in this server!");
             return;
         }
