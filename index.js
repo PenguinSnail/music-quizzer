@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { Client as DiscordClient, Events, GatewayIntentBits } from "discord.js";
 import SpotifyManager from "./src/managers/SpotifyManager.js";
+import ScoreManager from "./src/managers/ScoreManager.js";
 import { createHandler } from "./src/command.js";
 
 if (!process.env.DISCORD_TOKEN || !process.env.SPOTIFY_ID || !process.env.SPOTIFY_SECRET) {
@@ -47,6 +48,8 @@ const refreshSpotify = () => {
             process.exit(1);
         });
 }
+
+ScoreManager.loadBoards();
 
 // Login -------------------------------
 

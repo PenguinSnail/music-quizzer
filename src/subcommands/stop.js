@@ -1,4 +1,5 @@
 import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import ScoreManager from "../managers/ScoreManager.js";
 import QuizManager from "../managers/QuizManager.js";
 
 /**
@@ -34,8 +35,10 @@ export const handlerBuilder = () => {
             await interaction.reply("You need to be in the voice channel to stop a music quiz!");
             return;
         }
+        await interaction.reply("Stopping quiz...");
         QuizManager.stopQuiz(interaction.guildId);
-        await interaction.reply("Stop Command");
+        ScoreManager.dumpBoards();
+        await interaction.editReply("Stopped the music quiz");
     };
 };
 

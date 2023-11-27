@@ -29,6 +29,8 @@ export default class Quiz {
         this.count = count;
         /** @type {Track[]} */
         this.tracks;
+        /** @type {Map<string, number>} */
+        this.scores = new Map();
     }
 
     /**
