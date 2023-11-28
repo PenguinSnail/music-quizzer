@@ -49,8 +49,6 @@ const refreshSpotify = () => {
         });
 }
 
-ScoreManager.loadBoards();
-
 // Login -------------------------------
 
 SpotifyManager.createClient(process.env.SPOTIFY_ID, process.env.SPOTIFY_SECRET);

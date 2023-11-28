@@ -1,90 +1,66 @@
-import fs from 'fs';
+import sqlite3 from 'sqlite3';
+const scorefile = "./scores.sqlite";
+const db = new sqlite3.Database(
+    scorefile,
+    sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE | sqlite3.OPEN_FULLMUTEX,
+    (err) => {
+        if (err !== null) {
+            console.error("Error opening scores database file " + scorefile + "!", err);
+            process.exit(1);
+        }
+        console.log("Opened scores database file at " + scorefile);
+    }
+);
 
-const scorefile = "./scores.json";
-
-/** @type {Map<string, Map<string, number>>} */
-const scoreboards = new Map();
-
-/**
- * reset a guilds board to a blank state
- * @param {string} guild guild id
- */
-const resetBoard = (guild) => {
-    scoreboards.set(guild, new Map());
-}
+db.serialize(() => {
+    db.run("CREATE TABLE IF NOT EXISTS scores (guild TEXT, member TEXT, points INT, PRIMARY KEY (guild, member))", (err) => {
+        if (err !== null) {
+            console.error("Error creating scores table!", err);
+            process.exit(1);
+        }
+    });
+});
 
 /**
  * get a guilds scoreboard
  * @param {string} guild guild id
- * @returns {Map<string, number>}
+ * @returns {Promise<{
+ * guild: string,
+ * member: string,
+ * points: number
+ * }[]>}
  */
-const getBoard = (guild) => {
-    if (!scoreboards.get(guild)) resetBoard(guild);
-    return scoreboards.get(guild);
-}
+const getBoard = (guild) => new Promise((resolve, reject) => {
+    db.all("SELECT * FROM scores WHERE guild=?", guild, (err, rows) => {
+        if (err !== null) {
+            console.error("Error getting scoreboard for guild " + guild + "!", err);
+            reject(new Error("Error getting scoreboard!"));
+        }
+        resolve(rows);
+    });
+});
 
 /**
  * award points to a member in a guild
  * @param {string} guild guild id
  * @param {string} member member id
  * @param {number} points points to add
- * @returns {number} new points total
  */
-const awardPoints = (guild, member, points) => {
-    const board = getBoard(guild);
-    const currentPoints = board.get(member) ?? 0;
-    board.set(member, currentPoints + points);
-    return currentPoints + points;
-}
-
-const loadBoards = () => {
-    if (fs.existsSync(scorefile)) {
-        let data;
-        try {
-            const contents = fs.readFileSync(scorefile);
-            data = JSON.parse(contents);
-        } catch (e) {
-            console.error("Error reading score file!", e);
-            return;
-        }
-        try {
-            for (const guild of Object.keys(data)) {
-                const scores = new Map();
-                for (const member of data[guild]) {
-                    scores.set(member, data[guild][member]);
-                }
-                scoreboards.set(guild, scores);
+const awardPoints = (guild, member, points) => new Promise((resolve, reject) => {
+    db.run(
+        "INSERT INTO scores (guild, member, points) VALUES (?, ?, ?) ON CONFLICT(guild, member) DO UPDATE SET points=points+?",
+        guild, member, points, points,
+        (err) => {
+            if (err !== null) {
+                console.error("Error awarding points to user " + member + " in guild " + guild + "!", err);
+                reject("Error awarding points!");
+                return;
             }
-        } catch (e) {
-            console.error("Error setting scoreboards!", e);
-            return;
-        }
-    } else {
-        console.warn("No score file found!");
-    }
-}
-
-const dumpBoards = () => {
-    let dumpObj = {};
-    for (const board of scoreboards) {
-        let scores = {};
-        for (const score of board[1]) {
-            scores[score[0]] = score[1];
-        }
-        dumpObj[board[0]] = scores;
-    }
-    try {
-        fs.writeFileSync(scorefile, JSON.stringify(dumpObj));
-    } catch (e) {
-        console.error("Error dumping scoreboards to disk!", e);
-        return;
-    }
-}
+            resolve();
+        });
+});
 
 export default {
-    resetBoard,
     getBoard,
-    awardPoints,
-    loadBoards,
-    dumpBoards
+    awardPoints
 }

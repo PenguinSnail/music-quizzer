@@ -19,7 +19,8 @@
     "node-addon-api": "^7.0.0",
     "opusscript": "^0.1.1",
     "sodium": "^3.0.2",
-    "spotify-web-api-node": "^5.0.2"
+    "spotify-web-api-node": "^5.0.2",
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "eslint": "^7.22.0"

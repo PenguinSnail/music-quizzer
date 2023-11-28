@@ -28,16 +28,14 @@ export const handlerBuilder = () => {
         let embed;
         try {
             embed = new EmbedBuilder().setTitle("Music Quiz Scoreboard");
-            const board = ScoreManager.getBoard(interaction.guild.id);
-            const boardMembers = Array.from(board.keys());
-            if (boardMembers.length < 1) {
+            const board = await ScoreManager.getBoard(interaction.guild.id);
+            if (board.length < 1) {
                 embed.setDescription("There are no saved scores! Try playing a music quiz!");
             } else {
-                const scores = Array.from(board);
-                scores.sort((a, b) => a[1] - b[1]);
-                for (const s of scores) {
-                    const member = await interaction.guild.members.fetch({ id: s[0] });
-                    embed.addFields({ name: member.user.displayName, value: s[1] + " points" });
+                board.sort((a, b) => a.points - b.points);
+                for (const score of board) {
+                    const member = await interaction.guild.members.fetch({ user: score.member });
+                    embed.addFields({ name: member.user.displayName, value: score.points + " points" });
                 }
             }
         } catch (e) {
