@@ -27,15 +27,9 @@ const startQuiz = async (guildId, textChannel, voiceChannel, url, count) => {
     console.log("Starting quiz in guild " + guildId);
     const quiz = new Quiz(textChannel, voiceChannel, url, count);
     try {
-        await quiz.loadTracks();
-    } catch (e) {
-        throw e;
-    }
-    try {
-        // open a voice channel connection
-        quiz.openVoice();
+        quiz.startQuiz();
     } catch {
-        throw new Error("There was an error joining the voice channel!");
+        throw e;
     }
     quizzes.set(guildId, quiz);
 };
@@ -50,10 +44,9 @@ const stopQuiz = (guildId) => {
     const quiz = quizzes.get(guildId);
     if (quiz) {
         try {
-            // close the voice channel connection
-            quiz.closeVoice();
+            quiz.stopQuiz();
         } catch (e) {
-            throw new Error("There was an error leaving the voice channel!");
+            throw e;
         }
     }
     quizzes.delete(guildId);

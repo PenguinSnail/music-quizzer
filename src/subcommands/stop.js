@@ -1,5 +1,4 @@
 import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction } from "discord.js";
-import ScoreManager from "../managers/ScoreManager.js";
 import QuizManager from "../managers/QuizManager.js";
 
 /**
@@ -37,7 +36,6 @@ export const handlerBuilder = () => {
         }
         await interaction.reply("Stopping quiz...");
         QuizManager.stopQuiz(interaction.guildId);
-        ScoreManager.dumpBoards();
         await interaction.editReply("Stopped the music quiz");
     };
 };

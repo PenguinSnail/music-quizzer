@@ -45,6 +45,7 @@ const getBoard = (guild) => new Promise((resolve, reject) => {
  * @param {string} guild guild id
  * @param {string} member member id
  * @param {number} points points to add
+ * @throws user friendly error message
  */
 const awardPoints = (guild, member, points) => new Promise((resolve, reject) => {
     db.run(
@@ -53,7 +54,7 @@ const awardPoints = (guild, member, points) => new Promise((resolve, reject) => 
         (err) => {
             if (err !== null) {
                 console.error("Error awarding points to user " + member + " in guild " + guild + "!", err);
-                reject("Error awarding points!");
+                reject(new Error("Error awarding points!"));
                 return;
             }
             resolve();
