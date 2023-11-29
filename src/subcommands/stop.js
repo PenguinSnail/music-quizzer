@@ -25,18 +25,24 @@ export const handlerBuilder = () => {
      * @param {ChatInputCommandInteraction} interaction Command interaction
      */
     return async (interaction) => {
+        await interaction.deferReply();
         const quiz = QuizManager.getQuiz(interaction.guildId);
         if (!quiz) {
-            await interaction.reply("There is no active quiz in this server!");
+            await interaction.editReply({ content: "There is no active quiz in this server!" });
             return;
         }
         if (interaction.member.voice.channel !== quiz.voiceChannel) {
-            await interaction.reply("You need to be in the voice channel to stop a music quiz!");
+            await interaction.editReply({ content: "You need to be in the voice channel to stop a music quiz!" });
             return;
         }
-        await interaction.reply("Stopping quiz...");
-        QuizManager.stopQuiz(interaction.guildId);
-        await interaction.editReply("Stopped the music quiz");
+        await interaction.editReply({ content: "Stopping quiz..." });
+        try {
+            const msg = await QuizManager.stopQuiz(interaction.guildId);
+            await interaction.editReply({ content: msg });
+        } catch (e) {
+            console.error("Error stopping quiz in guild " + interaction.guildId, e);
+            await interaction.editReply({ content: e.message, ephemeral: true });
+        }
     };
 };
 

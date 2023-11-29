@@ -48,15 +48,17 @@ export const handlerBuilder = () => {
             await interaction.editReply({ content: "You need to be in a voice channel to start a music quiz!", ephemeral: true });
             return;
         }
+        await interaction.editReply({ content: "Starting the quiz..." });
         try {
-            await QuizManager.startQuiz(
+            const msg = await QuizManager.startQuiz(
                 interaction.guildId,
                 interaction.channel,
                 interaction.member.voice.channel,
                 interaction.options.getString("url"),
                 interaction.options.getInteger("count")
             );
-            await interaction.editReply({ content: "Starting the quiz..." });
+
+            await interaction.editReply({ content: msg });
         } catch (e) {
             console.error("Error starting quiz in guild " + interaction.guildId, "(" + e.name + ": " + e.message + ")");
             await interaction.editReply({ content: e.message, ephemeral: true });

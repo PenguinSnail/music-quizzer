@@ -1,3 +1,5 @@
+import { Collection, GuildMember } from "discord.js";
+
 // ported from https://github.com/hankhank10/demaster
 /**
  * Removes remaster and remix text from song titles
@@ -72,5 +74,6 @@ export function transform(text) {
  * @returns a modifier to add to the score
  */
 export function getPopularityModifier(popularity) {
-    return Math.round((50 - popularity) * (points.modifier / 50));
+    return Math.round((50 - popularity) * (process.env.POP_PTS / 50));
 }
+

@@ -1,4 +1,5 @@
 import { SlashCommandSubcommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import QuizManager from "../managers/QuizManager.js";
 
 /**
  * Command name
@@ -24,7 +25,24 @@ export const handlerBuilder = () => {
      * @param {ChatInputCommandInteraction} interaction Command interaction
      */
     return async (interaction) => {
-        await interaction.reply("Skip Command");
+        await interaction.deferReply();
+        const quiz = QuizManager.getQuiz(interaction.guildId);
+        if (!quiz) {
+            await interaction.editReply({ content: "There is no active quiz in this server!" });
+            return;
+        }
+        if (interaction.member.voice.channel !== quiz.voiceChannel) {
+            await interaction.editReply({ content: "You need to be in the voice channel to stop a music quiz!" });
+            return;
+        }
+        await interaction.editReply({ content: "Skipping the song..." });
+        try {
+            const msg = await QuizManager.skipTrack(interaction.guildId);
+            await interaction.editReply({ content: msg });
+        } catch (e) {
+            console.error("Error skipping song in guild " + interaction.guildId, e);
+            await interaction.editReply({ content: e.message, ephemeral: true });
+        }
     };
 };
 

@@ -1,8 +1,8 @@
 import { AudioPlayer, VoiceConnection, joinVoiceChannel, createAudioPlayer, AudioPlayerStatus } from "@discordjs/voice";
-import { TextChannel, VoiceChannel } from "discord.js";
-import Track from "./Track.js";
+import { EmbedBuilder, TextChannel, VoiceChannel } from "discord.js";
 import SpotifyManager from "../managers/SpotifyManager.js";
 import ScoreManager from "../managers/ScoreManager.js";
+import Track from "./Track.js";
 
 /**
  * An individual music quiz round
@@ -106,24 +106,84 @@ export default class Quiz {
     }
 
     /**
-     * Send the starting message
+     * Get the starting message for this quiz
+     * @returns {string} the starting message
      */
-    startMessage = () => {
-
+    getStartMessage = () => {
+        return `**Let's get started**! :headphones: :tada:
+            **${this.tracks.length}** songs have been randomly selected.
+            You have 30 seconds to guess each song.
+            Guess the song and artist by typing in chat. Points are awarded as follows:
+            > Artist: **${process.env.ARTIST_PTS} points**
+            > Title: **${process.env.TITLE_PTS} points**
+            > Popularity modifier: **+/- ${process.env.POP_PTS} points**
+            Type \`/${process.env.COMMAND} stop\` to stop the quiz`
+            .replace(/  +/g, "")
+            .replace(/\t/g, "")
     }
 
     /**
-     * Send the closing message
+     * Get the closing message
+     * @returns {string} the closing message
      */
-    stopMessage = () => {
-
+    getStopMessage = () => {
     }
 
     /**
-     * Send the track message
+     * get the track message
+     * @returns {string} the track message
      */
-    trackMessage = () => {
+    getTrackMessage = () => {
+        return `
+        > **${this.tracks[this.currentTrack].title}** by **${this.tracks[this.currentTrack].artist}** (${this.currentTrack + 1}/${this.tracks.length})
+        > Link: || ${this.tracks[this.currentTrack].trackUrl} ||
+        **__SCORES__**
+        ${this.voiceChannel.members
+                .filter(member => !member.user.bot && this.scores.has(member.user.id))
+                .sort((a, b) => this.scores.get(a) - this.scores.get(b))
+                .map((member, index) => {
+                    let position = `**${index + 1}.**`;
+                    if (index === 0) {
+                        position = ":first_place:";
+                    } else if (index === 1) {
+                        position = ":second_place:";
+                    } else if (index === 2) {
+                        position = ":third_place:";
+                    }
 
+                    return `${position} ${member.user.username} ${this.scores.get(member.id)} points`;
+                })
+                .join("\n")
+            }
+        `.replace(/  +/g, "").replace(/\t/g, "");
+    }
+
+    getTrackEmbed = () => {
+        const embed = new EmbedBuilder()
+            .setTitle(this.tracks[this.currentTrack].title)
+            .setAuthor({ name: this.tracks[this.currentTrack].artist })
+            .setDescription(`Song ${this.currentTrack + 1} of ${this.tracks.length}`)
+            .setURL(this.tracks[this.currentTrack].trackUrl);
+        for (
+            const [member, index] of this.voiceChannel.members
+                .filter(member => !member.user.bot && this.scores.has(member.user.id))
+                .sort((a, b) => this.scores.get(a) - this.scores.get(b))
+                .entries()
+        ) {
+            let position = `**${index + 1}.**`;
+            if (index === 0) {
+                position = ":first_place:";
+            } else if (index === 1) {
+                position = ":second_place:";
+            } else if (index === 2) {
+                position = ":third_place:";
+            }
+            embed.addFields({
+                name: `${position} ${member.user.username}`,
+                value: `${this.scores.get(member.id)} points`
+            });
+        }
+        return { embeds: [embed] };
     }
 
     /**
@@ -137,15 +197,19 @@ export default class Quiz {
         } catch (e) {
             throw e;
         }
-        this.startMessage();
-        console.log(this.tracks[this.currentTrack])
         this.audioPlayer.play(this.tracks[this.currentTrack].getAudioResource());
-        this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
-            if (this.currentTrack < this.tracks.length) {
-                this.trackMessage();
+        this.audioPlayer.on(AudioPlayerStatus.Idle, async () => {
+            this.textChannel.send(this.getTrackMessage());
+            if (this.currentTrack + 1 < this.tracks.length) {
                 this.playNextTrack();
             } else {
-                this.stopQuiz();
+                try {
+                await this.stopQuiz();
+                this.textChannel.send(this.getStopMessage());
+                } catch (e) {
+                    console.error("Error stopping quiz", e);
+                    this.textChannel.send(e.message);
+                }
             }
         });
     }
@@ -156,11 +220,10 @@ export default class Quiz {
      */
     stopQuiz = async () => {
         try {
-            this.saveScores();
+            await this.saveScores();
+            this.closeVoice();
         } catch (e) {
             throw e;
         }
-        this.closeVoice();
-        this.stopMessage();
     }
 }
