@@ -1,238 +1,268 @@
-// eslint-disable-next-line no-unused-vars
-import Discord from "discord.js";
-import { joinVoiceChannel, createAudioPlayer, createAudioResource } from "@discordjs/voice";
-// eslint-disable-next-line no-unused-vars
-import Leaderboard from "./Leaderboard.js";
-
-import { commands, points } from "../globals.js";
-import { checkGuess, getPopularityModifier, scoresToString } from "../utils.js";
-// eslint-disable-next-line no-unused-vars
+import { AudioPlayer, VoiceConnection, joinVoiceChannel, createAudioPlayer, AudioPlayerStatus } from "@discordjs/voice";
+import { EmbedBuilder, Message, TextChannel, VoiceChannel } from "discord.js";
+import SpotifyManager from "../managers/SpotifyManager.js";
+import ScoreManager from "../managers/ScoreManager.js";
 import Track from "./Track.js";
+import { getPopularityModifier, transform } from "../utils.js";
 
-class Quiz {
-	/**
-	 * @param {Discord.Client} client Discord API client
-	 * @param {Leaderboard} leaderboard Leaderboard manager
-	 * @param {Discord.Guild} guild Discord guild
-	 */
-	constructor(client, leaderboard, guild) {
-		this.client = client;
-		this.leaderboard = leaderboard;
-		this.guild = guild;
-		this.active = false;
+/**
+ * An individual music quiz round
+ */
+export default class Quiz {
+    /**
+    * Create a new Quiz object
+    * @param {TextChannel} textChannel text channel for guesses
+    * @param {VoiceChannel} voiceChannel voice channel for quiz audio
+    * @param {string} url spotify url
+    * @param {number | undefined} count song count
+    */
+    constructor(textChannel, voiceChannel, url, count) {
+        this.active = false;
+        /** @type {TextChannel} */
+        this.textChannel = textChannel;
+        /** @type {VoiceChannel} */
+        this.voiceChannel = voiceChannel;
+        /** @type {AudioPlayer} */
+        this.audioPlayer = createAudioPlayer();
+        /** @type {VoiceConnection} */
+        this.voiceConnection;
+        /** @type {string} */
+        this.url = url;
+        /** @type {number} */
+        this.count = count;
+        /** @type {Track[]} */
+        this.tracks;
+        /** @type {number} */
+        this.currentTrack = 0;
+        /** @type {Map<string, number>} */
+        this.scores = new Map();
+        /** @type {boolean} */
+        this.artistGuessed = false;
+        /** @type {boolean} */
+        this.titleGuessed = false;
+    }
 
-		this.textChannel;
-		this.voiceChannel;
-		this.connection;
-		this.player;
-		this.timer;
+    /**
+     * Open a voice connection
+     * @throws user friendly error message
+     */
+    openVoice() {
+        console.log("Joining voice channel " + this.voiceChannel.id + " in guild " + this.voiceChannel.guild.id);
+        try {
+            this.voiceConnection = joinVoiceChannel({
+                channelId: this.voiceChannel.id,
+                guildId: this.voiceChannel.guild.id,
+                adapterCreator: this.voiceChannel.guild.voiceAdapterCreator
+            });
+            this.voiceConnection.subscribe(this.audioPlayer);
+        } catch (e) {
+            console.error("Error opening voice connection in guild " + this.voiceChannel.guild.id, e);
+            throw new Error("Error opening voice channel!");
+        }
+    }
 
-		/** @type {Map<string, number} */
-		this.scores = new Map();
-		this.skipVotes = 0;
-		/** @type {Track[]} */
-		this.tracks = [];
-		this.track = 0;
+    /**
+     * Close a voice connection
+     * @throws user friendly error message
+     */
+    closeVoice() {
+        console.log("Leaving voice channel " + this.voiceChannel.id + " in guild " + this.voiceChannel.guild.id);
+        try {
+            this.audioPlayer.stop();
+            this.voiceConnection.destroy();
+        } catch (e) {
+            console.error("Error closing voice connection in guild " + this.voiceChannel.guild.id, e);
+            throw new Error("Error closing voice channel!");
+        }
+    }
 
-		this.artistGuessed = false;
-		this.titleGuessed = false;
+    /**
+     * Load tracks from the Spotify API
+     * @throws user friendly error message
+     */
+    loadTracks = async () => {
+        try {
+            this.tracks = await SpotifyManager.getTracks(this.url, this.count)
+        } catch (e) {
+            throw e;
+        };
+    };
 
-		// bind some methods to the class `this`
-		this.messageHandler = this.messageHandler.bind(this);
-		this.nextTrack = this.nextTrack.bind(this);
-	}
+    /**
+     * Advances the audio player to the next track
+     */
+    playNextTrack = () => {
+        this.artistGuessed = false;
+        this.titleGuessed = false;
+        this.currentTrack++;
+        const resource = this.tracks[this.currentTrack].getAudioResource();
+        this.audioPlayer.play(resource);
+    };
 
-	/**
-	 * Handle discord messages
-	 * @param {Discord.Message} message discord message
-	 */
-	messageHandler(message) {
-		// ignore bots
-		if (message.author.bot) return;
+    /**
+     * Saves scores to the database
+     * @throws user friendly error message
+     */
+    saveScores = async () => {
+        this.scores.forEach((v, k) => {
+            try {
+                ScoreManager.awardPoints(this.textChannel.guildId, k, v);
+            } catch (e) {
+                throw e;
+            }
+        });
+    }
 
-		if (this.active && message.channel == this.textChannel && this.voiceChannel.members.has(message.member.id)) {
-			if (message.content.toLowerCase().trim() === commands.stopCommand) {
-				this.endQuiz();
-			} else if (message.content.toLowerCase().trim() === commands.skipCommand) {
-				this.skipVotes++;
-				if (this.skipVotes >= Math.round(this.voiceChannel.members.filter(m => !m.user.bot).size / 2)) {
-					this.nextTrack("Song skipped!");
-				} else {
-					const neededVotes = Math.round(this.voiceChannel.members.size / 2) - this.skipVotes;
-					this.textChannel.send(`Need ${neededVotes} more ${neededVotes > 1 ? "votes" : "vote"} to skip!`);
-				}
-			} else {
-				const guessValid = checkGuess(message.content, this.tracks[this.track]);
-				let correct = false;
+    /**
+     * Get the starting message for this quiz
+     * @returns {string} the starting message
+     */
+    getStartMessage = () => {
+        return `**Let's get started**! :headphones: :tada:
+            **${this.tracks.length}** songs have been randomly selected.
+            You have 30 seconds to guess each song.
+            Guess the song and artist by typing in chat. Points are awarded as follows:
+            > Artist: **${process.env.ARTIST_PTS} points**
+            > Title: **${process.env.TITLE_PTS} points**
+            > Popularity modifier: **+/- ${process.env.POP_PTS} points**
+            Type \`/${process.env.COMMAND} stop\` to stop the quiz`
+            .replace(/  +/g, "")
+            .replace(/\t/g, "")
+    }
 
-				if (!this.artistGuessed && guessValid.includes("artist")) {
-					this.artistGuessed = true;
-					correct = true;
+    /**
+     * Get the closing message
+     * @returns {string} the closing message
+     */
+    getStopMessage = () => {
+    }
 
-					this.scores.set(
-						message.member.id,
-						(
-							this.scores.has(message.member.id)
-								? this.scores.get(message.member.id)
-								: 0
-						)
-						+ points.artist
-						+ getPopularityModifier(this.tracks[this.track].popularity)
-					);
-				}
+    /**
+     * get the track message
+     * @returns {string} the track message
+     */
+    getTrackMessage = () => {
+        return `
+        > **${this.tracks[this.currentTrack].title}** by **${this.tracks[this.currentTrack].artist}** (${this.currentTrack + 1}/${this.tracks.length})
+        > Link: || ${this.tracks[this.currentTrack].trackUrl} ||
+        **__SCORES__**
+        ${[...this.voiceChannel.members
+                .filter(member => !member.user.bot && this.scores.has(member.id))
+                .sort((a, b) => this.scores.get(a) - this.scores.get(b))]
+                .map(([id, member], index) => {
+                    let position = `**${index + 1}.**`;
+                    if (index === 0) {
+                        position = ":first_place:";
+                    } else if (index === 1) {
+                        position = ":second_place:";
+                    } else if (index === 2) {
+                        position = ":third_place:";
+                    }
 
-				if (!this.titleGuessed && guessValid.includes("title")) {
-					this.titleGuessed = true;
-					correct = true;
+                    return `${position} ${member.user.username} ${this.scores.get(member.id)} points`;
+                })
+                .join("\n")
+            }
+        `.replace(/  +/g, "").replace(/\t/g, "");
+    }
 
-					this.scores.set(
-						message.member.id,
-						(
-							this.scores.has(message.member.id)
-								? this.scores.get(message.member.id)
-								: 0
-						)
-						+ points.title
-						+ getPopularityModifier(this.tracks[this.track].popularity)
-					);
-				}
+    /**
+     * Start the quiz and send the opening message
+     * @throws user friendly error message
+     */
+    startQuiz = async () => {
+        this.active = true;
+        try {
+            await this.loadTracks();
+            this.openVoice();
+            this.textChannel.client.on('messageCreate', this.messageHandler);
+        } catch (e) {
+            throw e;
+        }
+        this.audioPlayer.play(this.tracks[this.currentTrack].getAudioResource());
+        this.audioPlayer.on(AudioPlayerStatus.Idle, async () => {
+            this.textChannel.send(this.getTrackMessage());
+            if (this.currentTrack + 1 < this.tracks.length) {
+                this.playNextTrack();
+            } else {
+                try {
+                    await this.stopQuiz();
+                    this.textChannel.send(this.getStopMessage());
+                } catch (e) {
+                    console.error("Error stopping quiz", e);
+                    this.textChannel.send(e.message);
+                }
+            }
+        });
+    }
 
-				if (correct) {
-					message.react("☑");
-				} else {
-					message.react("❌");
-				}
+    /**
+     * Stop the quiz and send the closing message
+     * @throws user friendly error message
+     */
+    stopQuiz = async () => {
+        this.active = false;
+        try {
+            await this.saveScores();
+            this.closeVoice();
+            this.textChannel.client.off('messageCreate', this.messageHandler);
+        } catch (e) {
+            throw e;
+        }
+    }
 
-				if (this.titleGuessed && this.artistGuessed) {
-					this.nextTrack("Song guessed!");
-				}
-			}
-		}
-	}
+    advanceQuiz = async () => {
+        this.textChannel.send(this.getTrackMessage());
+        if (this.currentTrack + 1 < this.tracks.length) {
+            try {
+                this.playNextTrack();
+            } catch (e) {
+                console.error("Error advancing song in guild " + quiz.guildId, e);
+                throw new Error("Error advancing song!");
+            }
+        } else {
+            await this.stopQuiz(guildId);
+        }
+    }
 
-	/**
-	 * Start the music quiz
-	 * @param {Discord.TextChannel} textChannel the text channel the quiz is in
-	 * @param {Discord.VoiceChannel} voiceChannel the voice channel the quiz is in
-	 * @param {Track[]} tracks the tracks to quiz
-	 */
-	startQuiz(textChannel, voiceChannel, tracks) {
-		this.client.on(Discord.Events.MessageCreate, this.messageHandler);
-		this.active = true;
+    /**
+     * Handle guess messages
+     * @param {Message} message message object
+     */
+    messageHandler = async (message) => {
+        if (message.channel.id !== this.textChannel.id || !this.voiceChannel.members.has(message.member.id) || message.member.user.bot) return;
+        let a = false;
+        let t = false;
+        if (!this.titleGuessed && transform(message.content).includes(transform(this.tracks[this.currentTrack].title))) {
+            t = true;
+            this.titleGuessed = true;
+        }
+        if (!this.artistGuessed && transform(message.content).includes(transform(this.tracks[this.currentTrack].artist))) {
+            a = true;
+            this.artistGuessed = true;
+        }
+        if (a || t) {
+            message.react("☑");
+            if (a) {
+                this.scores.set(
+                    message.member.id,
+                    this.scores.get(message.member.id) ?? 0
+                    + parseInt(process.env.ARTIST_PTS)
+                    + getPopularityModifier(this.tracks[this.currentTrack].popularity)
+                );
+            }
+            if (t) {
+                this.scores.set(
+                    message.member.id,
+                    this.scores.get(message.member.id) ?? 0
+                    + parseInt(process.env.TITLE_PTS)
+                    + getPopularityModifier(this.tracks[this.currentTrack].popularity)
+                );
+            }
+        } else {
+            message.react("❌");
+        }
 
-		this.textChannel = textChannel;
-		this.voiceChannel = voiceChannel;
-
-		this.scores.clear();
-		this.tracks = tracks;
-		this.track = 0;
-
-		this.artistGuessed = false;
-		this.titleGuessed = false;
-
-		try {
-			this.connection = joinVoiceChannel({
-				channelId: voiceChannel.id,
-				guildId: voiceChannel.guild.id,
-				adapterCreator: voiceChannel.guild.voiceAdapterCreator
-			});
-			this.player = createAudioPlayer();
-			this.connection.subscribe(this.player);
-		} catch (e) {
-			console.error("Error connecting to voice channel!", e);
-			textChannel.send("Unable to connect to the voice channel!");
-			this.endQuiz();
-		}
-
-		textChannel.send(`
-				**Let's get started**! :headphones: :tada:
-				**${this.tracks.length}** songs have been randomly selected.
-				You have 30 seconds to guess each song.
-				Guess the song and artist by typing in chat. Points are awarded as follows:
-				> Artist: **${points.artist} points**
-				> Title: **${points.title} points**
-				> Popularity modifier: **+/- ${points.modifier} points**
-				Type \`${commands.stopCommand}\` to stop the quiz
-
-				- GLHF :microphone:
-			`.replace(/  +/g, "").replace(/\t/g, ""));
-
-		this.playCurrentTrack();
-
-
-
-	}
-
-	/**
-	 * End the music quiz
-	 */
-	endQuiz() {
-		if (this.player) this.player.stop();
-		if (this.connection) this.connection.destroy();
-		this.client.off("message", this.messageHandler);
-		this.active = false;
-
-		this.leaderboard.addToGuildBoard(this.guild, this.scores);
-		this.scores.clear();
-
-		this.skipVotes = 0;
-		this.tracks = [];
-		this.track = 0;
-
-		this.artistGuessed = false;
-		this.titleGuessed = false;
-
-		clearTimeout(this.timer);
-	}
-
-	/**
-	 * Play the current track
-	 */
-	playCurrentTrack() {
-		if (this.track < this.tracks.length) {
-			try {
-				if (!this.tracks[this.track].previewUrl) throw new Error();
-				this.player.play(createAudioResource(this.tracks[this.track].previewUrl));
-			} catch (e) {
-				this.textChannel.send("Error playing song! Skipping...");
-				this.nextTrack();
-			}
-			this.timer = setTimeout(this.nextTrack, 29500);
-		} else {
-			this.endQuiz();
-		}
-	}
-
-	/**
-	 * Continue to the next track
-	 * @param {string} message a message to display
-	 */
-	nextTrack(message) {
-		this.player.stop();
-		clearTimeout(this.timer);
-		if (this.track < this.tracks.length) {
-			const song = this.tracks[this.track];
-			this.textChannel.send(`
-			**(${this.track + 1}/${this.tracks.length})** ${message ? message : ""}
-			> **${song.title}** by **${song.artist}**
-			> Link: || ${song.trackUrl} ||
-			**__SCORES__**
-			${scoresToString(this.scores, this.voiceChannel.members)}
-		
-		`.replace(/  +/g, "").replace(/\t/g, ""));
-
-			this.titleGuessed = false;
-			this.artistGuessed = false;
-			this.skipVotes = 0;
-
-			this.track++;
-			this.playCurrentTrack();
-		} else {
-			this.endQuiz();
-		}
-	}
-
-
+        if (this.titleGuessed && this.artistGuessed) this.advanceQuiz();
+    }
 }
-
-export default Quiz;

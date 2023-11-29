@@ -1,10 +1,12 @@
 {
   "name": "music-quizzer",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A Discord music quiz bot",
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
+    "register": "node register-commands.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Noah Piraino <noahapiraino@gmail.com>",
@@ -13,10 +15,12 @@
     "@discordjs/opus": "^0.9.0",
     "@discordjs/voice": "^0.16.1",
     "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
     "node-addon-api": "^7.0.0",
     "opusscript": "^0.1.1",
     "sodium": "^3.0.2",
-    "spotify-web-api-node": "^5.0.2"
+    "spotify-web-api-node": "^5.0.2",
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "eslint": "^7.22.0"
