@@ -1,8 +1,9 @@
 import { AudioPlayer, VoiceConnection, joinVoiceChannel, createAudioPlayer, AudioPlayerStatus } from "@discordjs/voice";
-import { EmbedBuilder, TextChannel, VoiceChannel } from "discord.js";
+import { EmbedBuilder, Message, TextChannel, VoiceChannel } from "discord.js";
 import SpotifyManager from "../managers/SpotifyManager.js";
 import ScoreManager from "../managers/ScoreManager.js";
 import Track from "./Track.js";
+import { getPopularityModifier, transform } from "../utils.js";
 
 /**
  * An individual music quiz round
@@ -16,6 +17,7 @@ export default class Quiz {
     * @param {number | undefined} count song count
     */
     constructor(textChannel, voiceChannel, url, count) {
+        this.active = false;
         /** @type {TextChannel} */
         this.textChannel = textChannel;
         /** @type {VoiceChannel} */
@@ -34,6 +36,10 @@ export default class Quiz {
         this.currentTrack = 0;
         /** @type {Map<string, number>} */
         this.scores = new Map();
+        /** @type {boolean} */
+        this.artistGuessed = false;
+        /** @type {boolean} */
+        this.titleGuessed = false;
     }
 
     /**
@@ -86,6 +92,8 @@ export default class Quiz {
      * Advances the audio player to the next track
      */
     playNextTrack = () => {
+        this.artistGuessed = false;
+        this.titleGuessed = false;
         this.currentTrack++;
         const resource = this.tracks[this.currentTrack].getAudioResource();
         this.audioPlayer.play(resource);
@@ -98,7 +106,7 @@ export default class Quiz {
     saveScores = async () => {
         this.scores.forEach((v, k) => {
             try {
-                ScoreManager.awardPoints(interaction.guildId, k, v);
+                ScoreManager.awardPoints(this.textChannel.guildId, k, v);
             } catch (e) {
                 throw e;
             }
@@ -138,10 +146,10 @@ export default class Quiz {
         > **${this.tracks[this.currentTrack].title}** by **${this.tracks[this.currentTrack].artist}** (${this.currentTrack + 1}/${this.tracks.length})
         > Link: || ${this.tracks[this.currentTrack].trackUrl} ||
         **__SCORES__**
-        ${this.voiceChannel.members
-                .filter(member => !member.user.bot && this.scores.has(member.user.id))
-                .sort((a, b) => this.scores.get(a) - this.scores.get(b))
-                .map((member, index) => {
+        ${[...this.voiceChannel.members
+                .filter(member => !member.user.bot && this.scores.has(member.id))
+                .sort((a, b) => this.scores.get(a) - this.scores.get(b))]
+                .map(([id, member], index) => {
                     let position = `**${index + 1}.**`;
                     if (index === 0) {
                         position = ":first_place:";
@@ -158,42 +166,16 @@ export default class Quiz {
         `.replace(/  +/g, "").replace(/\t/g, "");
     }
 
-    getTrackEmbed = () => {
-        const embed = new EmbedBuilder()
-            .setTitle(this.tracks[this.currentTrack].title)
-            .setAuthor({ name: this.tracks[this.currentTrack].artist })
-            .setDescription(`Song ${this.currentTrack + 1} of ${this.tracks.length}`)
-            .setURL(this.tracks[this.currentTrack].trackUrl);
-        for (
-            const [member, index] of this.voiceChannel.members
-                .filter(member => !member.user.bot && this.scores.has(member.user.id))
-                .sort((a, b) => this.scores.get(a) - this.scores.get(b))
-                .entries()
-        ) {
-            let position = `**${index + 1}.**`;
-            if (index === 0) {
-                position = ":first_place:";
-            } else if (index === 1) {
-                position = ":second_place:";
-            } else if (index === 2) {
-                position = ":third_place:";
-            }
-            embed.addFields({
-                name: `${position} ${member.user.username}`,
-                value: `${this.scores.get(member.id)} points`
-            });
-        }
-        return { embeds: [embed] };
-    }
-
     /**
      * Start the quiz and send the opening message
      * @throws user friendly error message
      */
     startQuiz = async () => {
+        this.active = true;
         try {
             await this.loadTracks();
             this.openVoice();
+            this.textChannel.client.on('messageCreate', this.messageHandler);
         } catch (e) {
             throw e;
         }
@@ -204,8 +186,8 @@ export default class Quiz {
                 this.playNextTrack();
             } else {
                 try {
-                await this.stopQuiz();
-                this.textChannel.send(this.getStopMessage());
+                    await this.stopQuiz();
+                    this.textChannel.send(this.getStopMessage());
                 } catch (e) {
                     console.error("Error stopping quiz", e);
                     this.textChannel.send(e.message);
@@ -219,11 +201,68 @@ export default class Quiz {
      * @throws user friendly error message
      */
     stopQuiz = async () => {
+        this.active = false;
         try {
             await this.saveScores();
             this.closeVoice();
+            this.textChannel.client.off('messageCreate', this.messageHandler);
         } catch (e) {
             throw e;
         }
+    }
+
+    advanceQuiz = async () => {
+        this.textChannel.send(this.getTrackMessage());
+        if (this.currentTrack + 1 < this.tracks.length) {
+            try {
+                this.playNextTrack();
+            } catch (e) {
+                console.error("Error advancing song in guild " + quiz.guildId, e);
+                throw new Error("Error advancing song!");
+            }
+        } else {
+            await this.stopQuiz(guildId);
+        }
+    }
+
+    /**
+     * Handle guess messages
+     * @param {Message} message message object
+     */
+    messageHandler = async (message) => {
+        if (message.channel.id !== this.textChannel.id || !this.voiceChannel.members.has(message.member.id) || message.member.user.bot) return;
+        let a = false;
+        let t = false;
+        if (!this.titleGuessed && transform(message.content).includes(transform(this.tracks[this.currentTrack].title))) {
+            t = true;
+            this.titleGuessed = true;
+        }
+        if (!this.artistGuessed && transform(message.content).includes(transform(this.tracks[this.currentTrack].artist))) {
+            a = true;
+            this.artistGuessed = true;
+        }
+        if (a || t) {
+            message.react("☑");
+            if (a) {
+                this.scores.set(
+                    message.member.id,
+                    this.scores.get(message.member.id) ?? 0
+                    + parseInt(process.env.ARTIST_PTS)
+                    + getPopularityModifier(this.tracks[this.currentTrack].popularity)
+                );
+            }
+            if (t) {
+                this.scores.set(
+                    message.member.id,
+                    this.scores.get(message.member.id) ?? 0
+                    + parseInt(process.env.TITLE_PTS)
+                    + getPopularityModifier(this.tracks[this.currentTrack].popularity)
+                );
+            }
+        } else {
+            message.react("❌");
+        }
+
+        if (this.titleGuessed && this.artistGuessed) this.advanceQuiz();
     }
 }

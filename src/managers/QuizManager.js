@@ -12,7 +12,10 @@ const quizzes = new Map();
  * @returns quiz object
  */
 const getQuiz = (guildId) => {
-    return quizzes.get(guildId);
+    const quiz = quizzes.get(guildId);
+    if (quiz && quiz.active) return quiz;
+    quizzes.delete(guildId);
+    return;
 }
 
 /**
@@ -29,7 +32,7 @@ const startQuiz = async (guildId, textChannel, voiceChannel, url, count) => {
     const quiz = new Quiz(textChannel, voiceChannel, url, count);
     try {
         await quiz.startQuiz();
-    } catch {
+    } catch (e) {
         throw e;
     }
     quizzes.set(guildId, quiz);
@@ -53,7 +56,7 @@ const stopQuiz = async (guildId) => {
         }
     }
     quizzes.delete(guildId);
-    return quiz.getStopMessage();
+    return quiz.getTrackMessage();
 };
 
 const skipTrack = async (guildId) => {
