@@ -1,18 +1,21 @@
-FROM node:20.2.0-alpine3.18 AS builder
+FROM node:21-bookworm AS builder
 WORKDIR /music-quizzer
 
-RUN apk add --no-cache ffmpeg opus-tools make libtool autoconf automake gcc g++ python3
+RUN apt update
+RUN apt install -y ffmpeg opus-tools make libtool autoconf automake gcc g++ python3
 
 COPY ./package.json ./
 COPY ./package-lock.json ./
 RUN npm ci
 
-FROM node:20.2.0-alpine3.18
+FROM node:21-bookworm
 WORKDIR /music-quizzer
 
-RUN apk add --no-cache ffmpeg opus-tools
+RUN apt update
+RUN apt install -y ffmpeg opus-tools
 
 COPY --from=builder /music-quizzer ./
+
 COPY ./ ./
 
 ENTRYPOINT ["node", "index.js"]
