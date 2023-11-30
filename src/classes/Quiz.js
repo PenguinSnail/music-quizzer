@@ -246,7 +246,7 @@ export default class Quiz {
             if (a) {
                 this.scores.set(
                     message.member.id,
-                    this.scores.get(message.member.id) ?? 0
+                    (this.scores.get(message.member.id) ?? 0)
                     + parseInt(process.env.ARTIST_PTS)
                     + getPopularityModifier(this.tracks[this.currentTrack].popularity)
                 );
@@ -254,7 +254,7 @@ export default class Quiz {
             if (t) {
                 this.scores.set(
                     message.member.id,
-                    this.scores.get(message.member.id) ?? 0
+                    (this.scores.get(message.member.id) ?? 0)
                     + parseInt(process.env.TITLE_PTS)
                     + getPopularityModifier(this.tracks[this.currentTrack].popularity)
                 );
