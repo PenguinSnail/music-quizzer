@@ -26,7 +26,8 @@ export function sanitizeTitle(title) {
         "- Single ",
         "- Studio ",
         "- Edit ",
-        "- Radio "
+        "- Radio ",
+        "- Main "
     ]);
 
     offendingText.forEach(part => {

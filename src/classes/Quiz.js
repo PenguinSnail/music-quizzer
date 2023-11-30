@@ -221,7 +221,7 @@ export default class Quiz {
                 throw new Error("Error advancing song!");
             }
         } else {
-            await this.stopQuiz(guildId);
+            await this.stopQuiz();
         }
     }
 
